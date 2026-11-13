@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-rss",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Folo-inspired RSS and Atom reader for DeepSeek Harness: subscriptions, categories, tags, full text, search, OPML, feed discovery, and DeepSeek AI summaries, translation, classification, and article Q&A.",
   "license": "MIT",
   "type": "module",

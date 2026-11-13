@@ -34,7 +34,7 @@ Installation links the directory, adds the bundle to the profile, and activates 
 plugin_manager action=install_bundle target=dsh-plugin-rss
 ```
 
-Pin a version with `target=dsh-plugin-rss@1.0.0`. The package has no dependencies and no install scripts, so no build approval is needed.
+Pin a version with `target=dsh-plugin-rss@1.1.0`. The package has no dependencies and no install scripts, so no build approval is needed.
 
 ## Verify
 

@@ -20,10 +20,10 @@ The plugin appears in the plugin list with the RSS icon. Its row is named `rss` 
 
 ## Option B — install from an agent session
 
-Ask the agent to install the bundle with the absolute path:
+Ask the agent to install the bundle with the absolute path of this directory:
 
 ```text
-plugin_manager action=install_bundle target=/Users/qifenglun/Documents/DSH/DSH-RSS
+plugin_manager action=install_bundle target=/absolute/path/to/dsh-plugin-rss
 ```
 
 Installation links the directory, adds the bundle to the profile, and activates the `rss` row. There are no install scripts, so no build approval is needed.

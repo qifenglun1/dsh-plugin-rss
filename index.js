@@ -76,14 +76,23 @@ export function apply(ctx, rawConfig = {}) {
     store,
     config,
     logger,
-    onNewArticles: (feedId, ids) => queueClassification(feedId, ids),
+    onNewArticles: (feedId, ids) => queueNewArticles(feedId, ids),
   })
-  const api = createApi({ store, engine, ai, config, logger, onNewArticles: queueClassification })
+  const api = createApi({ store, engine, ai, config, logger, onNewArticles: queueNewArticles })
 
   let classificationQueue = []
   let classifying = false
+  let summaryQueue = []
+  let summarizing = false
   let disposed = false
   const classificationLimit = 24
+  const summaryLimit = 16
+
+  /** Queue background AI work for newly stored articles. */
+  function queueNewArticles(feedId, ids) {
+    queueClassification(feedId, ids)
+    queueSummaries(ids)
+  }
 
   /** Classify a bounded number of new articles in the background. */
   function queueClassification(feedId, ids) {
@@ -110,6 +119,35 @@ export function apply(ctx, rawConfig = {}) {
       }
     } finally {
       classifying = false
+    }
+  }
+
+  /** Summarize a bounded number of new articles in the background. */
+  function queueSummaries(ids) {
+    if (disposed || store.openError) return
+    if (!store.settings().autoSummarize || !ai.available()) return
+    for (const id of ids.slice(0, 4)) {
+      if (summaryQueue.length >= summaryLimit) break
+      if (!summaryQueue.includes(id)) summaryQueue.push(id)
+    }
+    void drainSummaries()
+  }
+
+  async function drainSummaries() {
+    if (summarizing) return
+    summarizing = true
+    try {
+      while (!disposed && summaryQueue.length > 0) {
+        if (!store.settings().autoSummarize) { summaryQueue = []; break }
+        const id = summaryQueue.shift()
+        const article = store.getArticle(id)
+        if (article === undefined || (typeof article.ai?.summary === 'string' && article.ai.summary !== '')) continue
+        try { await ai.summarize(article) } catch (error) {
+          logger.warn?.(`rss: auto-summary failed: ${error instanceof Error ? error.message : String(error)}`)
+        }
+      }
+    } finally {
+      summarizing = false
     }
   }
 

@@ -698,3 +698,24 @@ test('client source keeps the markAll, async-id, and retry guards', async () => 
   assert.match(source, /if \(current\?\.url && \/\^https\?:\\\/\\\/\/i\.test\(current\.url\)\)/)
   assert.match(source, /aliveRef\.current = true/)
 })
+
+test('client source auto-summarizes opened articles when the setting is on', async () => {
+  const source = await readFile(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(source, /const autoSummaryTried = useRef\(new Set\(\)\)/)
+  assert.match(source, /state\.settings\?\.autoSummarize !== true/)
+  assert.match(source, /autoSummaryTried\.current\.delete\(id\)/)
+  assert.match(source, /autoSummaryTried\.current\.has\(current\.id\)/)
+  assert.match(source, /void summarize\(false\)/)
+})
+
+test('client source wires article question suggestions into the ask composer', async () => {
+  const source = await readFile(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(source, /hostCall\('aiQuestions', \{ id, history \}\)/)
+  assert.match(source, /const assistantTurns = history\.reduce/)
+  assert.match(source, /onQuestions\(id, history\)/)
+  assert.match(source, /const chooseQuestion = \(text\) =>/)
+  assert.match(source, /setQuestion\(text\)/)
+  assert.match(source, /questionInputRef\.current/)
+  assert.match(source, /className: 'rss-qa-suggestion'/)
+  assert.match(source, /setSelectionRange\?\.\(end, end\)/)
+})

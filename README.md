@@ -18,10 +18,11 @@ A Folo-inspired RSS and Atom information hub that runs natively inside DeepSeek 
 - **Search** across title, tags, author, summary, and body with token scoring.
 - **Favorites and read later**, plus mark-read / mark-unread / mark-all-read with a one-step undo for bulk marking.
 - **DeepSeek AI**:
-  - TL;DR plus key-point **summaries**, cached per article, with regenerate and copy actions.
+  - TL;DR plus key-point **summaries**, cached per article, with regenerate and copy actions. An optional **automatic summary** setting (off by default) writes summaries for newly stored articles in the background and for articles you open without one.
   - Whole-article **translation** into your preferred language, also regenerable and copyable.
   - **Auto-classification** into categories and tags with a relevance score that stays visible in the AI card.
   - **Grounded Q&A** that answers only from the selected article and keeps a short conversation.
+  - **Suggested questions** in the Ask tab: three article-grounded prompts below the input, refreshed after each answer from the article and the conversation so far; click one to fill the box, then edit or send it.
   - A **daily brief** across the most relevant unread articles.
   - **For you** ranking built from recency, reading history, starred/read-later signals, and feed/tag affinity, with an **AI rank** action that asks DeepSeek to re-rank the unread candidates and explain each pick.
 - **OPML import and export**.
@@ -52,7 +53,7 @@ When the page reloads, click the RSS icon in the sidebar panel rail.
 4. Use the left rail for **All**, **Unread**, **For you**, **Starred**, **Read later**, categories, tags, and individual feeds. Hover or focus a feed to refresh or edit it.
 5. Select a story to read it. The reader offers previous/next, mark-read, star, read later, full-text fetch, and open-original actions; in a narrow window a back control returns to the list. Mark all read shows an **Undo** action in the toast.
 6. In the **AI assistant** card choose **Summary**, **Translate**, or **Ask**. Cached summaries and translations can be regenerated or copied. The sparkle action auto-classifies the article and keeps the categories and relevance visible; the double-sparkle action writes a daily brief. In **For you**, the list toolbar's double-sparkle action asks DeepSeek to re-rank the unread candidates and explain its picks.
-7. **Settings** is a full-page view with seven tabs: **General** (refresh interval, page size), **AI** (route, languages, auto-classification), **Content filters**, **OPML** (file picker, paste area, import action fixed at the bottom, export), **Categories**, **Subscriptions** (restore defaults, delete invalid feeds after a preview and recheck, clear all), and **Keyboard shortcuts**.
+7. **Settings** is a full-page view with seven tabs: **General** (refresh interval, page size), **AI** (route, languages, automatic summaries, auto-classification), **Content filters**, **OPML** (file picker, paste area, import action fixed at the bottom, export), **Categories**, **Subscriptions** (restore defaults, delete invalid feeds after a preview and recheck, clear all), and **Keyboard shortcuts**.
 8. **Content filters** now live in Settings, together with mute/highlight rule management. Articles hidden by a mute rule are reported in the list with a Show/Hide toggle.
 
 ## Keyboard shortcuts
@@ -149,14 +150,15 @@ Configuration belongs to the bundle row in the profile's `cordis.patch.yml`. The
         aiMaxInputChars: 14000
         translateTo: ''          # empty picks English/Chinese from article language
         autoClassify: false
+        autoSummarize: false     # summarize new and opened articles in the background
         refreshOnStart: true
 ```
 
 `SEED_FEEDS` in `src/config.js` is the single source of truth for the default subscriptions: it seeds a fresh `data.json` and is exactly what **Restore default feeds** merges back (missing URLs only; existing rows keep their title, category, tags, and enabled state). The default set is 25 sources: AI (Google DeepMind, OpenAI News, Ahead of AI, Last Week in AI, Hugging Face Blog, Simon Willison’s Weblog, arXiv cs.AI, Google Research), Technology (Hacker News, The Verge, Ars Technica, The GitHub Blog, MacRumors, selfh.st, Hacker News Best, The Pragmatic Engineer, InfoQ, TechCrunch, MIT Technology Review), Science (Huberman Lab), and Recommended (Vox, Trump’s Truth, BBC 中文, NPR News, The Guardian World).
 
-The Settings panel stores per-user overrides for the AI route, translation/answer language, refresh interval, page size, and auto-classification in the data file. A non-empty `aiProvider`/`aiModel` in the bundle configuration wins over the panel.
+The Settings panel stores per-user overrides for the AI route, translation/answer language, refresh interval, page size, auto-summarization, and auto-classification in the data file. A non-empty `aiProvider`/`aiModel` in the bundle configuration wins over the panel.
 
-`refreshMinutes`, `pageSize`, `autoClassify`, and `translateTo` seed a **fresh** library. Once `data.json` exists, change them in the panel; editing the bundle configuration again does not override the stored values.
+`refreshMinutes`, `pageSize`, `autoClassify`, `autoSummarize`, and `translateTo` seed a **fresh** library. Once `data.json` exists, change them in the panel; editing the bundle configuration again does not override the stored values.
 
 Requests to loopback, private, link-local, and cloud metadata hosts are rejected by default so a malicious OPML file or prompt-injected agent cannot make the plugin fetch internal services. Set `allowPrivateHosts: true` to subscribe to feeds on your own LAN.
 

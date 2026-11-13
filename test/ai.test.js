@@ -97,6 +97,65 @@ test('answers a grounded question and writes a brief', async () => {
   assert.match(brief.brief, /article says/)
 })
 
+test('suggests three article-grounded questions in the article language', async () => {
+  const store = makeStore()
+  let system = ''
+  let prompt = ''
+  const llm = {
+    async prepareCall(config) {
+      return {
+        config,
+        async *stream(options) {
+          system = options.system
+          prompt = options.messages[0].content[0].text
+          yield {
+            type: 'text-delta',
+            text: JSON.stringify({
+              questions: [
+                'Why did the launch slip?',
+                'What changes for users?',
+                'What is the next milestone?',
+                'A fourth question that must be dropped',
+              ],
+            }),
+          }
+          yield { type: 'finish', reason: { kind: 'stop' } }
+        },
+      }
+    },
+  }
+  const ctx = {
+    get(name) {
+      if (name === 'llm') return llm
+      if (name === 'agentDefaultModel') return { currentSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-flash' }) }
+      return undefined
+    },
+  }
+  const ai = new RssAi({ ctx, store, config: { aiMaxInputChars: 4000 } })
+  const result = await ai.questions(article)
+  assert.deepEqual(result.questions, [
+    'Why did the launch slip?',
+    'What changes for users?',
+    'What is the next milestone?',
+  ])
+  assert.equal(result.language, 'English')
+  assert.match(system, /English/)
+  assert.match(prompt, /exactly 3/)
+  assert.equal(result.route.model, 'deepseek-flash')
+
+  const followUp = await ai.questions(article, {
+    history: [
+      { role: 'user', content: 'What changed?' },
+      { role: 'assistant', content: 'The launch date moved to May.' },
+    ],
+  })
+  assert.equal(followUp.questions.length, 3)
+  assert.match(system, /follow-up questions/i)
+  assert.match(prompt, /Conversation so far:/)
+  assert.match(prompt, /<conversation>/)
+  assert.match(prompt, /The launch date moved to May\./)
+})
+
 test('reports an unavailable model clearly', async () => {
   const store = makeStore()
   const ai = new RssAi({ ctx: { get: () => undefined }, store, config: {} })
@@ -327,6 +386,10 @@ test('refuses to summarize an article without readable text', async () => {
   const ai = new RssAi({ ctx: makeCtx('x'), store, config: {} })
   await assert.rejects(
     () => ai.summarize({ ...article, contentHtml: '', summaryHtml: '', title: 'Only a title' }),
+    (error) => error instanceof AiFailureError && error.code === 'ai_empty_content',
+  )
+  await assert.rejects(
+    () => ai.questions({ ...article, contentHtml: '', summaryHtml: '', title: 'Only a title' }),
     (error) => error instanceof AiFailureError && error.code === 'ai_empty_content',
   )
 })

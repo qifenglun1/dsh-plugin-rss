@@ -147,7 +147,7 @@ export function createApi(deps) {
     })
     const result = store.ingest(feed.id, validated.feed.items)
     store.recordFetch(feed.id, { feed: validated.feed })
-    if (store.settings().autoClassify) {
+    if (store.settings().autoClassify || store.settings().autoSummarize) {
       void notifyNew(feed.id, result.addedIds, validated.feed)
     }
     return { feed: feedView(store.state.feeds.find(item => item.id === feed.id), store), added: result.added, updated: result.updated }
@@ -659,6 +659,12 @@ export function createApi(deps) {
     async aiAsk(params = {}) {
       const article = mustArticle(params.id)
       return ai.ask(article, { question: params.question, history: params.history, language: params.language, signal: params.signal })
+    },
+
+    /** Suggest three article-grounded questions for the Q&A composer. */
+    async aiQuestions(params = {}) {
+      const article = mustArticle(params.id)
+      return ai.questions(article, { history: params.history, language: params.language, signal: params.signal })
     },
 
     /** Ask DeepSeek to rank the most relevant unread candidates. */

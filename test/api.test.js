@@ -66,6 +66,14 @@ async function setup() {
     targetLanguage: () => 'English',
     available: () => false,
     async summarize() { throw new AiUnavailableError() },
+    async questions(article, options = {}) {
+      assert.deepEqual(options.history?.map(turn => turn.role), ['user', 'assistant'])
+      return {
+        questions: ['What changed?', 'Who benefits?', 'What happens next?'],
+        language: 'English',
+        route: { provider: 'deepseek-official', model: 'deepseek-flash', available: true },
+      }
+    },
     async recommend(articles) {
       return {
         picks: articles.slice(0, 2).map((article, index) => ({ id: article.id, score: 90 - index * 10, reason: `pick ${index + 1}` })),
@@ -223,6 +231,11 @@ test('settings, categories, and AI unavailability surface as errors', async () =
     assert.equal(store.state.categories.some(item => item.name === 'Product'), false)
     await api.methods.feedAdd({ url: 'https://integration.example/feed.xml' })
     const article = (await api.methods.articles({ view: 'all' })).items[0]
+    const suggested = await api.methods.aiQuestions({
+      id: article.id,
+      history: [{ role: 'user', content: 'What changed?' }, { role: 'assistant', content: 'A lot.' }],
+    })
+    assert.deepEqual(suggested.questions, ['What changed?', 'Who benefits?', 'What happens next?'])
     await assert.rejects(() => api.call('aiSummarize', { id: article.id }), (error) => error instanceof AiUnavailableError)
     await assert.rejects(() => api.call('nope', {}), /Unknown operation/)
   } finally {

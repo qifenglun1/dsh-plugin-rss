@@ -30,6 +30,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   translateTo: '',
   /** Run automatic classification when new articles are stored. */
   autoClassify: false,
+  /** Generate AI summaries for new and opened articles. */
+  autoSummarize: false,
   /** Refresh on Host start. */
   refreshOnStart: true,
 })
@@ -74,6 +76,7 @@ export function normalizeConfig(raw = {}) {
     aiMaxInputChars: positive(config.aiMaxInputChars, DEFAULT_CONFIG.aiMaxInputChars, 60_000),
     translateTo: typeof config.translateTo === 'string' ? config.translateTo.trim() : '',
     autoClassify: bool(config.autoClassify, DEFAULT_CONFIG.autoClassify),
+    autoSummarize: bool(config.autoSummarize, DEFAULT_CONFIG.autoSummarize),
     refreshOnStart: bool(config.refreshOnStart, DEFAULT_CONFIG.refreshOnStart),
   }
 }

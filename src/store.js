@@ -118,6 +118,7 @@ export function createInitialState(config, now = Date.now()) {
       aiModel: '',
       translateTo: config.translateTo ?? '',
       autoClassify: config.autoClassify === true,
+      autoSummarize: config.autoSummarize === true,
       pageSize: config.pageSize ?? 40,
       refreshMinutes: config.refreshMinutes ?? 30,
       preferredLanguage: '',
@@ -147,6 +148,7 @@ function reconcileState(raw, config) {
   settings.pageSize = Math.min(200, Math.max(10, Math.round(Number(settings.pageSize) || base.settings.pageSize)))
   settings.refreshMinutes = Math.min(10_080, Math.max(0, Math.round(Number(settings.refreshMinutes) || 0)))
   settings.autoClassify = settings.autoClassify === true
+  settings.autoSummarize = settings.autoSummarize === true
   settings.aiProvider = typeof settings.aiProvider === 'string' ? settings.aiProvider.slice(0, 120) : ''
   settings.aiModel = typeof settings.aiModel === 'string' ? settings.aiModel.slice(0, 160) : ''
   settings.translateTo = typeof settings.translateTo === 'string' ? settings.translateTo.slice(0, 40) : ''
@@ -374,6 +376,7 @@ export class RssStore {
     if (typeof patch.translateTo === 'string') target.translateTo = patch.translateTo.trim().slice(0, 40)
     if (typeof patch.preferredLanguage === 'string') target.preferredLanguage = patch.preferredLanguage.trim().slice(0, 40)
     if (typeof patch.autoClassify === 'boolean') target.autoClassify = patch.autoClassify
+    if (typeof patch.autoSummarize === 'boolean') target.autoSummarize = patch.autoSummarize
     if (typeof patch.pageSize === 'number' && Number.isFinite(patch.pageSize)) {
       target.pageSize = Math.min(200, Math.max(10, Math.round(patch.pageSize)))
     }

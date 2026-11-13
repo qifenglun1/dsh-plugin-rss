@@ -258,9 +258,25 @@ test('the loaded panel renders the feed rail, article cards, reader, and AI summ
   const main = registrations.find(item => item.options.name === 'main')
   const tree = renderTree(main.component({ t: key => key, ...main.options.inject() }))
   const classes = classesOf(tree)
-  for (const name of ['rss-page', 'rss-nav', 'rss-list', 'rss-reader', 'rss-card', 'rss-reader-title', 'rss-article', 'rss-ai', 'rss-richtext', 'rss-tagchip']) {
+  for (const name of ['rss-page', 'rss-nav', 'rss-list', 'rss-reader', 'rss-card', 'rss-reader-title', 'rss-article', 'rss-ai', 'rss-richtext', 'rss-tagchip', 'rss-ai-actions', 'rss-ai-copy']) {
     assert.equal(classes.has(name), true, `missing ${name}`)
   }
+  const aiActions = []
+  walk(tree, (node) => {
+    if (typeof node.props?.className === 'string' && node.props.className.split(/\s+/).includes('rss-ai-copy')) aiActions.push(node)
+  })
+  assert.equal(aiActions.length, 1)
+  assert.equal(aiActions[0].props['aria-label'], 'ai.copySummary')
+  assert.equal(aiActions[0].props.title, 'ai.copySummary')
+  assert.equal(aiActions[0].children.length, 1)
+  assert.equal(aiActions[0].children[0].type, 'svg')
+  assert.equal(aiActions[0].props.disabled, false)
+  const aiTabs = []
+  walk(tree, (node) => {
+    if (typeof node.props?.className === 'string' && node.props.className.split(/\s+/).includes('rss-aitab')) aiTabs.push(node)
+  })
+  assert.deepEqual(aiTabs.map(node => node.props.children), ['reader.summary', 'reader.ask', 'reader.translate'])
+  assert.match(aiTabs[2].props.className, /rss-aitab-end/)
   const titles = []
   walk(tree, (node) => {
     if (node.type === 'h1' || node.type === 'h2') titles.push(node)
@@ -285,7 +301,7 @@ test('every dialog surface renders without throwing', async () => {
   const article = { id: 'a1', feedId: 'f1', feedTitle: 'Example', title: 'Story', url: '', author: '', publishedAt: new Date().toISOString(), tags: [], image: '', read: false, starred: false, readLater: false, contentHtml: '<p>Body</p>', summaryHtml: '', ai: {} }
   const base = (dialog, brief = null) => [makeState(), rows, { kind: 'all' }, '', 'a1', article, null, false, null, null, '', null, dialog, null, brief, null, false, 'summary', '', [], false, '']
 
-  const renderPage = (queue) => {
+  const renderPage = (queue, asTree = false) => {
     let loaded
     new Function('window', source)({ __ModuleLoader__: { load(options) { loaded = options } } })
     const React = createReactMock(queue)
@@ -297,10 +313,12 @@ test('every dialog surface renders without throwing', async () => {
       slots: { inject(key, cb) { return cb() }, register(options, component) { registrations.push({ options, component }); return () => {} } },
     })
     const main = registrations.find(item => item.options.name === 'main')
-    return classesOf(renderTree(main.component({ t: key => key, ...main.options.inject() })))
+    const tree = renderTree(main.component({ t: key => key, ...main.options.inject() }))
+    return asTree ? tree : classesOf(tree)
   }
   const renderDialog = (dialog, brief = null) => renderPage(base(dialog, brief))
   const renderSettings = tab => renderPage(base({ type: 'settings', tab }).slice(0, 17))
+  const renderSettingsTree = tab => renderPage(base({ type: 'settings', tab }).slice(0, 17), true)
 
   for (const tab of ['manage', 'general', 'ai', 'filters', 'opml', 'categories', 'shortcuts']) {
     const classes = renderSettings(tab)
@@ -311,6 +329,12 @@ test('every dialog surface renders without throwing', async () => {
     assert.equal(classes.has('rss-settings-foot'), true, `${tab}: footer`)
   }
   assert.equal(renderSettings('ai').has('rss-settings-card'), true)
+  const aiSwitches = []
+  walk(renderSettingsTree('ai'), (node) => {
+    if (node.props?.role === 'switch') aiSwitches.push(node)
+  })
+  assert.equal(aiSwitches.length, 2)
+  assert.deepEqual(aiSwitches.map(node => node.props['aria-checked']), [false, false])
   assert.equal(renderSettings('filters').has('rss-filter-form'), true)
   assert.equal(renderSettings('filters').has('rss-filter-row'), true)
   const opml = renderSettings('opml')
@@ -330,6 +354,28 @@ test('every dialog surface renders without throwing', async () => {
   assert.equal(shortcutsTab.has('rss-shortcut-row'), true)
   assert.equal(shortcutsTab.has('rss-settings-foot'), true)
 
+  const askQueue = base(null).slice(0, 17).concat(['ask', '', [], false, '', ['One?', 'Two?', 'Three?'], false])
+  const askTree = renderPage(askQueue, true)
+  const askSuggestions = []
+  walk(askTree, (node) => {
+    if (typeof node.props?.className === 'string' && node.props.className.split(/\s+/).includes('rss-qa-suggestion')) askSuggestions.push(node)
+  })
+  assert.deepEqual(askSuggestions.map(node => node.props.children), ['One?', 'Two?', 'Three?'])
+  const askInputs = []
+  walk(askTree, (node) => { if (node.props?.className === 'rss-input') askInputs.push(node) })
+  assert.equal(askInputs[0].props.placeholder, undefined)
+  assert.equal(askInputs[0].props['aria-label'], 'reader.ask')
+  const askSend = []
+  walk(askTree, (node) => { if (node.props?.className === 'rss-qa-send') askSend.push(node) })
+  assert.equal(askSend.length, 1)
+  assert.equal(askSend[0].props['aria-label'], 'ai.send')
+  assert.equal(askSend[0].children.length, 1)
+  assert.equal(askSend[0].children[0].type, 'svg')
+  const askLoadingTree = renderPage(base(null).slice(0, 17).concat(['ask', '', [], false, '', [], true]), true)
+  const askLoadingClasses = classesOf(askLoadingTree)
+  assert.equal(askLoadingClasses.has('rss-qa-suggestions'), true)
+  assert.equal(askLoadingClasses.has('rss-qa-suggestions-loading'), true)
+
   const add = renderDialog({ type: 'addFeed' })
   assert.equal(add.has('rss-field'), true)
   const remove = renderDialog({ type: 'removeFeed', feed: { id: 'f1', title: 'Example' } })
@@ -339,6 +385,9 @@ test('every dialog surface renders without throwing', async () => {
   const recommend = renderDialog({ type: 'recommend', picks: [{ id: 'a1', title: 'Story', score: 92, reason: 'deep', feedTitle: 'Example', publishedAt: new Date().toISOString() }] })
   assert.equal(recommend.has('rss-pick'), true)
   assert.equal(recommend.has('rss-pick-score'), true)
+  const markAll = renderDialog({ type: 'confirmMarkAll' })
+  assert.equal(markAll.has('rss-modal'), true)
+  assert.equal(markAll.has('rss-btn-primary'), true)
 })
 
 test('filled controls use a theme-contrast text token instead of hardcoded white', async () => {
@@ -348,6 +397,15 @@ test('filled controls use a theme-contrast text token instead of hardcoded white
   assert.match(source, /\.rss-btn-danger \{[^}]*color: var\(--dsw-alias-bg-base\)/)
   assert.match(source, /\.rss-brand-mark \{[^}]*color: var\(--dsw-alias-bg-base\)/)
   assert.doesNotMatch(source, /\.rss-btn-primary \{[^}]*color: #fff/)
+})
+
+test('the AI card width follows the article content column', async () => {
+  const here = dirname(fileURLToPath(import.meta.url))
+  const source = await readFile(join(here, '..', 'client.js'), 'utf8')
+  assert.match(source, /\.rss-ai \{ width: calc\(min\(100%, 820px\) - 68px\);/)
+  assert.match(source, /\.rss-ai \{ width: calc\(min\(100%, 820px\) - 48px\); \}/)
+  assert.match(source, /\.rss-ai \{ width: calc\(min\(100%, 820px\) - 36px\); \}/)
+  assert.doesNotMatch(source, /\.rss-reader-title, \.rss-reader-top, \.rss-reader-meta, \.rss-reader-tags, \.rss-article, \.rss-ai \{ padding-left/)
 })
 
 test('the management section lists invalid feeds and the prune and clear dialogs render', async () => {

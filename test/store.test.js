@@ -25,6 +25,24 @@ function article(guid, title, publishedAt, extra = {}) {
   }
 }
 
+test('auto-summarization is off by default and persists per-user overrides', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-rss-store-'))
+  const filePath = join(dir, 'data.json')
+  try {
+    assert.equal(normalizeConfig({}).autoSummarize, false)
+    assert.equal(normalizeConfig({ autoSummarize: 'on' }).autoSummarize, true)
+    const store = new RssStore({ filePath, config, logger: { warn() {}, info() {} } })
+    await store.open()
+    assert.equal(store.settings().autoSummarize, false)
+    store.saveSettings({ autoSummarize: true })
+    await store.close()
+    const reopened = new RssStore({ filePath, config, logger: { warn() {}, info() {} } })
+    await reopened.open()
+    assert.equal(reopened.settings().autoSummarize, true)
+    await reopened.close()
+  } finally { await rm(dir, { recursive: true, force: true }) }
+})
+
 test('starts with categories and no feeds when seeds are disabled', async () => {
   const { store, cleanup } = await makeStore()
   try {

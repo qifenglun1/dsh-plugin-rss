@@ -162,7 +162,7 @@ window.__ModuleLoader__.load({
       'ai.translateNow': 'Translate with AI',
       'ai.translation': 'Translation',
       'ai.askEmpty': 'Ask anything about this article. Answers use only its text.',
-      'ai.askPlaceholder': 'What is the main argument?',
+      'ai.suggestionsLoading': 'Suggesting questions…',
       'ai.send': 'Send',
       'ai.thinking': 'Thinking…',
       'ai.busy': 'DeepSeek is working…',
@@ -185,10 +185,15 @@ window.__ModuleLoader__.load({
       'dialog.aiHint': 'Leave both empty to inherit the Harness default model. DeepSeek is used for summaries, translation, classification, and Q&A.',
       'dialog.translateTo': 'Translation language',
       'dialog.autoClassify': 'Classify new articles automatically',
+      'dialog.autoSummarize': 'Generate AI summaries automatically (new and opened articles)',
       'dialog.refreshMinutes': 'Refresh interval (minutes, 0 disables)',
       'dialog.pageSize': 'Articles per page',
       'dialog.preferredLanguage': 'Answer language',
       'dialog.save': 'Save',
+      'dialog.markAll': 'Mark all as read?',
+      'dialog.markAllScope': 'Scope: {scope}',
+      'dialog.markAllHint': 'This marks every unread article in the current view as read. You can undo it from the notice afterwards.',
+      'dialog.markAllConfirm': 'Mark all read',
       'dialog.filters': 'Content filters',
       'dialog.filterHint': 'Mute rules hide matching articles. Highlight rules mark them in the list.',
       'dialog.filterName': 'Name',
@@ -266,6 +271,7 @@ window.__ModuleLoader__.load({
       'shortcuts.close': 'Close the narrow-window reader, drawer, or search',
       'shortcuts.hint': 'Single-key shortcuts are ignored while typing; ⌘/Ctrl+K still focuses search.',
       'ai.copy': 'Copy',
+      'ai.copySummary': 'Copy AI summary',
       'ai.configure': 'Open AI settings',
       'ai.classification': 'Categories',
       'ai.relevance': 'Relevance {n}',
@@ -455,7 +461,7 @@ window.__ModuleLoader__.load({
       'ai.translateNow': 'AI 翻译',
       'ai.translation': '译文',
       'ai.askEmpty': '就这篇文章提问，回答只依据文章内容。',
-      'ai.askPlaceholder': '文章的主要观点是什么？',
+      'ai.suggestionsLoading': '正在生成推荐问题…',
       'ai.send': '发送',
       'ai.thinking': '思考中…',
       'ai.busy': 'DeepSeek 正在处理…',
@@ -478,10 +484,15 @@ window.__ModuleLoader__.load({
       'dialog.aiHint': '两项都留空时沿用 Harness 默认模型。摘要、翻译、分类和问答都由 DeepSeek 完成。',
       'dialog.translateTo': '翻译语言',
       'dialog.autoClassify': '自动分类新文章',
+      'dialog.autoSummarize': '自动生成 AI 摘要（新文章和打开的文章）',
       'dialog.refreshMinutes': '刷新间隔（分钟，0 表示关闭）',
       'dialog.pageSize': '每页文章数',
       'dialog.preferredLanguage': '回答语言',
       'dialog.save': '保存',
+      'dialog.markAll': '全部标为已读？',
+      'dialog.markAllScope': '范围：{scope}',
+      'dialog.markAllHint': '这会把当前视图中的所有未读文章标为已读，操作后可从提示中撤销。',
+      'dialog.markAllConfirm': '全部标为已读',
       'dialog.filters': '内容过滤',
       'dialog.filterHint': '屏蔽规则会隐藏匹配文章，高亮规则会在列表中标记它们。',
       'dialog.filterName': '名称',
@@ -559,6 +570,7 @@ window.__ModuleLoader__.load({
       'shortcuts.close': '关闭窄屏阅读器 / 抽屉 / 搜索',
       'shortcuts.hint': '在输入框中输入时不会触发单键快捷键；⌘/Ctrl+K 仍可聚焦搜索。',
       'ai.copy': '复制',
+      'ai.copySummary': '复制 AI 摘要',
       'ai.configure': '打开 AI 设置',
       'ai.classification': '分类',
       'ai.relevance': '相关度 {n}',
@@ -863,6 +875,7 @@ window.__ModuleLoader__.load({
       pause: ['M9 5v14', 'M15 5v14'],
       play: ['M8 5l11 7-11 7V5Z'],
       forward: ['M9 6l6 6-6 6'],
+      send: ['M22 2L11 13', 'M22 2l-7 20-4-9-9-4 20-7Z'],
       arrowLeft: ['M20 12H4', 'M10 6l-6 6 6 6'],
       help: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M9.6 9.2a2.5 2.5 0 1 1 3.6 2.3c-.7.4-1.2.9-1.2 1.8', 'M12 17h.01'],
       copy: ['M9 9h10v10H9z', 'M5 15V5h10'],
@@ -1378,17 +1391,24 @@ window.__ModuleLoader__.load({
 
     function AiPanel({
       t, article, busy, fullTextBusy, aiError, onDismissAiError, onSummarize, onTranslate,
-      onClassify, onAsk, onBrief, onCopy, onOpenAiSettings, aiInfo, qaCache,
+      onAsk, onCopy, onOpenAiSettings, aiInfo, qaCache, onQuestions,
     }) {
       const [tab, setTab] = useState('summary')
       const [question, setQuestion] = useState('')
       const [history, setHistory] = useState([])
       const [localBusy, setLocalBusy] = useState(false)
       const [error, setError] = useState('')
+      const [suggestions, setSuggestions] = useState([])
+      const [suggestionsLoading, setSuggestionsLoading] = useState(false)
       const scrollRef = useRef(null)
       const articleRef = useRef(article)
       const localCache = useRef(new Map())
+      const questionCache = useRef(new Map())
+      const questionRequests = useRef(new Set())
+      const questionInputRef = useRef(null)
+      const activeQuestionKey = useRef('')
       const cache = qaCache ?? localCache
+      const assistantTurns = history.reduce((count, turn) => count + (turn?.role === 'assistant' ? 1 : 0), 0)
 
       useEffect(() => {
         articleRef.current = article
@@ -1401,6 +1421,40 @@ window.__ModuleLoader__.load({
         setError('')
         setTab('summary')
       }, [article?.id])
+
+      useEffect(() => {
+        if (tab !== 'ask') return
+        if (onQuestions === undefined || aiInfo?.available === false) {
+          setSuggestions([])
+          setSuggestionsLoading(false)
+          return
+        }
+        const id = article?.id
+        if (id === undefined) return
+        const key = `${id}:${article?.contentLength ?? 0}:${assistantTurns}`
+        activeQuestionKey.current = key
+        const cached = questionCache.current.get(key)
+        if (cached !== undefined) {
+          setSuggestions(cached)
+          setSuggestionsLoading(false)
+          return
+        }
+        if (questionRequests.current.has(key)) {
+          setSuggestionsLoading(true)
+          return
+        }
+        questionRequests.current.add(key)
+        setSuggestions([])
+        setSuggestionsLoading(true)
+        void onQuestions(id, history).then((list) => {
+          if (!Array.isArray(list) || list.length === 0) return
+          questionCache.current.set(key, list)
+          if (activeQuestionKey.current === key) setSuggestions(list)
+        }).catch(() => {}).finally(() => {
+          questionRequests.current.delete(key)
+          if (activeQuestionKey.current === key) setSuggestionsLoading(false)
+        })
+      }, [tab, article?.id, article?.contentLength, aiInfo?.available, onQuestions, assistantTurns])
 
       useEffect(() => {
         if (scrollRef.current !== null) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -1436,7 +1490,11 @@ window.__ModuleLoader__.load({
             cache.current.set(targetId, final)
             while (cache.current.size > 20) cache.current.delete(cache.current.keys().next().value)
           }
-          if (articleRef.current?.id === targetId) setHistory(final)
+          if (articleRef.current?.id === targetId) {
+            setHistory(final)
+            setSuggestions([])
+            setSuggestionsLoading(true)
+          }
         } catch (caught) {
           if (targetId !== undefined) {
             cache.current.set(targetId, history)
@@ -1448,11 +1506,11 @@ window.__ModuleLoader__.load({
         }
       }
 
-      const tabButton = (key, label) => h('button', {
+      const tabButton = (key, label, className = '') => h('button', {
         type: 'button',
         role: 'tab',
         'aria-selected': tab === key,
-        className: `rss-aitab ${tab === key ? 'is-active' : ''}`,
+        className: `rss-aitab ${tab === key ? 'is-active' : ''} ${className}`,
         onClick: () => setTab(key),
       }, label)
 
@@ -1473,19 +1531,41 @@ window.__ModuleLoader__.load({
           disabled: working,
         }))
 
+      const summaryText = typeof summary === 'string' ? summary.trim() : ''
+      const canCopy = onCopy !== undefined && summaryText !== ''
+      const copySummary = () => {
+        if (!canCopy || onCopy === undefined) return
+        void onCopy(summary)
+      }
+
+      const chooseQuestion = (text) => {
+        setQuestion(text)
+        const node = questionInputRef.current
+        if (node === null || node === undefined) return
+        node.focus()
+        const end = typeof node.value === 'string' ? node.value.length : 0
+        node.setSelectionRange?.(end, end)
+      }
+
       return h('div', { className: 'rss-ai' },
         h('div', { className: 'rss-ai-head' },
           h('div', { className: 'rss-ai-title' },
             h('span', { className: 'rss-ai-spark' }, h(Icon, { name: 'sparkles', size: 15 })),
             t('reader.ai')),
           aiInfo === undefined ? null : h('span', { className: 'rss-ai-model' }, interpolate(t('ai.model'), { provider: aiInfo.provider, model: aiInfo.model }))),
-        h('div', { className: 'rss-aitabs', role: 'tablist' },
-          tabButton('summary', t('reader.summary')),
-          tabButton('translate', t('reader.translate')),
-          tabButton('ask', t('reader.ask')),
-          h('div', { className: 'rss-ai-spacer' }),
-          h(IconButton, { icon: 'sparkle', label: t('reader.classify'), onClick: onClassify, disabled: working || unavailable }),
-          h(IconButton, { icon: 'sparkles', label: t('reader.brief'), onClick: onBrief, disabled: working || unavailable })),
+        h('div', { className: 'rss-aitabs' },
+          h('div', { className: 'rss-ai-tabgroup', role: 'tablist' },
+            tabButton('summary', t('reader.summary')),
+            tabButton('ask', t('reader.ask')),
+            tabButton('translate', t('reader.translate'), 'rss-aitab-end')),
+          h('div', { className: 'rss-ai-actions' },
+            h(IconButton, {
+              icon: 'copy',
+              label: t('ai.copySummary'),
+              onClick: copySummary,
+              disabled: !canCopy,
+              className: 'rss-ai-copy',
+            }))),
         classified
           ? h('div', { className: 'rss-ai-classified' },
             categories.length > 0
@@ -1534,16 +1614,39 @@ window.__ModuleLoader__.load({
               h(Banner, { t, message: error, onClose: () => setError('') }))
             : null),
         tab === 'ask'
-          ? h('div', { className: 'rss-qa-input' },
-            h('input', {
-              className: 'rss-input',
-              value: question,
-              placeholder: t('ai.askPlaceholder'),
-              onChange: event => setQuestion(event.target.value),
-              onKeyDown: event => { if (!isComposingEvent(event) && event.key === 'Enter') void send() },
-              disabled: working || unavailable,
-            }),
-            h(Button, { variant: 'primary', onClick: send, disabled: working || unavailable || question.trim() === '' }, t('ai.send')))
+          ? h(React.Fragment, null,
+            h('div', { className: 'rss-qa-input' },
+              h('input', {
+                className: 'rss-input',
+                ref: questionInputRef,
+                value: question,
+                'aria-label': t('reader.ask'),
+                onChange: event => setQuestion(event.target.value),
+                onKeyDown: event => { if (!isComposingEvent(event) && event.key === 'Enter') void send() },
+                disabled: working || unavailable,
+              }),
+              h('button', {
+                type: 'button',
+                className: 'rss-qa-send',
+                onClick: send,
+                title: t('ai.send'),
+                'aria-label': t('ai.send'),
+                disabled: working || unavailable || question.trim() === '',
+              }, h(Icon, { name: 'send', size: 15 }))),
+            suggestionsLoading
+              ? h('div', { className: 'rss-qa-suggestions is-loading', 'aria-busy': 'true' },
+                h('span', { className: 'rss-qa-suggestions-loading' }, t('ai.suggestionsLoading')))
+              : suggestions.length > 0
+                ? h('div', { className: 'rss-qa-suggestions' },
+                  suggestions.map((text, index) => h('button', {
+                    key: index,
+                    type: 'button',
+                    className: 'rss-qa-suggestion',
+                    onClick: () => chooseQuestion(text),
+                    title: text,
+                    disabled: working || unavailable,
+                  }, text)))
+                : null)
           : null,
         h('div', { className: 'rss-ai-privacy' }, t('ai.privacy')),
         working ? h('div', { className: 'rss-ai-working' }, h('span', { className: 'rss-pulse' }), workingLabel) : null)
@@ -1552,8 +1655,8 @@ window.__ModuleLoader__.load({
     function Reader(props) {
       const {
         t, article, loading, aiInfo, aiBusy, fullTextBusy, onMark, onFullText, onSummarize,
-        onTranslate, onClassify, onAsk, onBrief, onOpenOriginal, error, onDismissError,
-        onRetryError, aiError, onDismissAiError, onCopy, onOpenAiSettings, qaCache,
+        onTranslate, onAsk, onOpenOriginal, error, onDismissError,
+        onRetryError, aiError, onDismissAiError, onCopy, onOpenAiSettings, onQuestions, qaCache,
         onBack, onPrev, onNext, canPrev, canNext, scrollRef, operationBusy,
       } = props
       useEffect(() => {
@@ -1628,13 +1731,12 @@ window.__ModuleLoader__.load({
             t, article, busy: aiBusy, fullTextBusy, aiInfo,
             aiError,
             onDismissAiError,
-            onBrief,
             onSummarize,
             onTranslate,
-            onClassify,
             onAsk,
             onCopy,
             onOpenAiSettings,
+            onQuestions,
             qaCache,
           }),
           h('article', {
@@ -1890,6 +1992,7 @@ window.__ModuleLoader__.load({
               : h('input', { className: 'rss-input', value: form.aiModel, onChange: event => set('aiModel', event.target.value), placeholder: 'deepseek-chat' })),
           h(Field, { label: t('dialog.translateTo') }, h('input', { className: 'rss-input', value: form.translateTo, onChange: event => set('translateTo', event.target.value), placeholder: '简体中文' })),
           h(Field, { label: t('dialog.preferredLanguage') }, h('input', { className: 'rss-input', value: form.preferredLanguage, onChange: event => set('preferredLanguage', event.target.value), placeholder: 'English' })),
+          h(Toggle, { checked: form.autoSummarize, onChange: value => set('autoSummarize', value), label: t('dialog.autoSummarize') }),
           h(Toggle, { checked: form.autoClassify, onChange: value => set('autoClassify', value), label: t('dialog.autoClassify') }),
           h(Button, { onClick: onOpenModels }, t('dialog.aiModels'))))
     }
@@ -2532,6 +2635,7 @@ window.__ModuleLoader__.load({
         translateTo: state?.settings.translateTo ?? '',
         preferredLanguage: state?.settings.preferredLanguage ?? '',
         autoClassify: state?.settings.autoClassify === true,
+        autoSummarize: state?.settings.autoSummarize === true,
         refreshMinutes: state?.settings.refreshMinutes ?? 30,
         pageSize: state?.settings.pageSize ?? 40,
       }))
@@ -2554,6 +2658,7 @@ window.__ModuleLoader__.load({
           translateTo: state.settings?.translateTo ?? '',
           preferredLanguage: state.settings?.preferredLanguage ?? '',
           autoClassify: state.settings?.autoClassify === true,
+          autoSummarize: state.settings?.autoSummarize === true,
           refreshMinutes: state.settings?.refreshMinutes ?? 30,
           pageSize: state.settings?.pageSize ?? 40,
         }
@@ -2751,6 +2856,7 @@ window.__ModuleLoader__.load({
       const toastTimer = useRef(null)
       const lastMarkAll = useRef(null)
       const qaCache = useRef(new Map())
+      const autoSummaryTried = useRef(new Set())
       const lastReaderAction = useRef(null)
       const viewRef = useRef(view)
       const queryRef = useRef(query)
@@ -2921,6 +3027,8 @@ window.__ModuleLoader__.load({
         try {
           const article = await hostCall('article', { id, markRead: options.markRead !== false, fullText: false }, controller.signal)
           if (!aliveRef.current || controller.signal.aborted) return
+          // Retry an automatic summary on each fresh open, even after an earlier failure.
+          autoSummaryTried.current.delete(id)
           setCurrent(article)
           if (options.markRead !== false) {
             setArticles(previous => previous === null ? previous : {
@@ -3137,6 +3245,7 @@ window.__ModuleLoader__.load({
         clearError('reader')
         try {
           const article = await hostCall('fullText', { id: targetId })
+          autoSummaryTried.current.delete(targetId)
           setCurrent(previous => previous !== null && previous.id === targetId ? article : previous)
         } catch (caught) {
           showError('reader', caught.message ?? t('error.generic'))
@@ -3176,8 +3285,25 @@ window.__ModuleLoader__.load({
       }, [aiBusy, busy, clearError, current, showError, showToast, t])
 
       const summarize = useCallback((force) => aiAction('summary', id => hostCall('aiSummarize', { id, force: force === true })), [aiAction])
+
+      // With automatic summaries enabled, opening an article without a cached
+      // summary starts one immediately instead of waiting for a click.
+      useEffect(() => {
+        if (state === null || state.settings?.autoSummarize !== true || state.ai?.available === false) return
+        if (current === null || readerLoading || busy !== null || aiBusy !== null) return
+        if (typeof current.ai?.summary === 'string' && current.ai.summary !== '') return
+        if (autoSummaryTried.current.has(current.id)) return
+        autoSummaryTried.current.add(current.id)
+        void summarize(false)
+      }, [aiBusy, busy, current, readerLoading, state, summarize])
+
       const translate = useCallback((force) => aiAction('translate', id => hostCall('aiTranslate', { id, force: force === true })), [aiAction])
       const classify = useCallback(() => aiAction('classify', id => hostCall('aiClassify', { id })), [aiAction])
+      const suggestQuestions = useCallback(async (id, history) => {
+        const result = await hostCall('aiQuestions', { id, history })
+        return Array.isArray(result.questions) ? result.questions : []
+      }, [])
+
       const ask = useCallback(async (question, history) => {
         if (current === null) throw new Error(t('error.generic'))
         setAiBusy('ask')
@@ -3318,6 +3444,11 @@ window.__ModuleLoader__.load({
         setNavOpen(false)
         setDialog({ type: 'shortcuts' })
       }, [])
+
+      const requestMarkAll = useCallback(() => {
+        if (busy !== null) return
+        setDialog({ type: 'confirmMarkAll' })
+      }, [busy])
 
       const openSettings = useCallback(async (tab = 'general') => {
         setNavOpen(false)
@@ -3535,6 +3666,18 @@ window.__ModuleLoader__.load({
 
       const closeDialog = useCallback(() => { setDialog(null); setManageDialog(null) }, [])
 
+      const markAllScope = (() => {
+        let scope = t('view.all')
+        if (view.kind === 'feed') scope = state?.feeds.find(item => item.id === view.id)?.title ?? scope
+        else if (view.kind === 'category') scope = state?.categories.find(item => item.id === view.id)?.name ?? scope
+        else if (view.kind === 'tag') scope = `#${view.id}`
+        else {
+          const found = VIEWS.find(item => item.key === view.kind)
+          if (found !== undefined) scope = t(found.label)
+        }
+        if (query.trim() !== '') scope += ` · “${query.trim()}”`
+        return scope
+      })()
       const settingsOpen = dialog?.type === 'settings'
       const settingsTab = settingsOpen ? (dialog.tab ?? 'general') : null
       const discoverOpen = dialog?.type === 'discover'
@@ -3566,7 +3709,7 @@ window.__ModuleLoader__.load({
           onMark: markArticle,
           onLoadMore: loadMore,
           onRefresh: refresh,
-          onMarkAll: markAll,
+          onMarkAll: requestMarkAll,
           onAiRank: writeRank,
           aiBusyRank: aiBusy,
           navOpen,
@@ -3594,9 +3737,8 @@ window.__ModuleLoader__.load({
           onFullText: fullText,
           onSummarize: summarize,
           onTranslate: translate,
-          onClassify: classify,
           onAsk: ask,
-          onBrief: writeBrief,
+          onQuestions: suggestQuestions,
           onOpenOriginal: openOriginal,
           onCopy: copyText,
           onOpenAiSettings: () => { void openSettings('ai') },
@@ -3624,6 +3766,18 @@ window.__ModuleLoader__.load({
         }) : null,
         dialog?.type === 'shortcuts' ? h(ShortcutsDialog, { t, onClose: closeDialog }) : null,
         dialog?.type === 'recommend' ? h(RecommendDialog, { t, picks: dialog.picks, onClose: closeDialog, onOpen: id => { setDialog(null); void openArticle(id) } }) : null,
+        dialog?.type === 'confirmMarkAll' ? h(Modal, {
+          title: t('dialog.markAll'),
+          onClose: closeDialog,
+          footer: h(React.Fragment, null,
+            h(Button, { onClick: closeDialog }, t('dialog.cancel')),
+            h(Button, {
+              variant: 'primary',
+              onClick: async () => { closeDialog(); await markAll() },
+            }, t('dialog.markAllConfirm'))),
+        },
+        h('p', null, interpolate(t('dialog.markAllScope'), { scope: markAllScope })),
+        h('p', { className: 'rss-muted' }, t('dialog.markAllHint'))) : null,
         dialog?.type === 'removeFeed' ? h(Modal, {
           t,
           title: t('dialog.removeFeed'),
@@ -3864,16 +4018,19 @@ window.__ModuleLoader__.load({
 .rss-article table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: .92em; }
 .rss-article th, .rss-article td { border: 1px solid var(--dsw-alias-border-l1); padding: 6px 9px; text-align: left; }
 .rss-article hr { border: 0; border-top: 1px solid var(--dsw-alias-border-l1); margin: 1.6em 0; }
-.rss-ai { max-width: 820px; margin: 14px auto 0; border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; background: var(--dsw-alias-bg-layer-1); overflow: hidden; }
+.rss-ai { width: calc(min(100%, 820px) - 68px); max-width: 820px; margin: 14px auto 0; border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; background: var(--dsw-alias-bg-layer-1); overflow: hidden; }
 .rss-ai-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px 6px; }
 .rss-ai-title { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; }
 .rss-ai-spark { color: var(--dsw-alias-brand-primary); }
 .rss-ai-model { color: var(--dsw-alias-label-secondary); font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rss-aitabs { display: flex; align-items: center; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--dsw-alias-border-l1); }
+.rss-ai-tabgroup { display: flex; flex: 1; align-items: center; gap: 2px; min-width: 0; }
 .rss-aitab { padding: 6px 8px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; cursor: pointer; }
 .rss-aitab:hover { color: var(--dsw-alias-label-primary); }
 .rss-aitab.is-active { color: var(--dsw-alias-label-primary); border-bottom-color: var(--dsw-alias-brand-primary); }
-.rss-ai-spacer { flex: 1; }
+.rss-aitab-end { margin-left: auto; }
+.rss-ai-actions { display: flex; flex: none; align-items: center; gap: 4px; margin-left: 4px; padding-left: 8px; border-left: 1px solid var(--dsw-alias-border-l1); }
+.rss-ai-copy { color: var(--dsw-alias-brand-primary); }
 .rss-ai-body { max-height: 280px; min-height: 72px; overflow-y: auto; padding: 10px 13px; font-size: 13px; }
 .rss-ai-placeholder { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; color: var(--dsw-alias-label-secondary); }
 .rss-ai-placeholder p { margin: 0; }
@@ -3894,6 +4051,14 @@ window.__ModuleLoader__.load({
 .rss-qa-turn.is-ai { align-self: flex-start; background: var(--dsw-alias-bg-base); border: 1px solid var(--dsw-alias-border-l1); }
 .rss-qa-thinking { color: var(--dsw-alias-label-secondary); font-style: italic; }
 .rss-qa-input { display: flex; gap: 6px; padding: 9px 12px; border-top: 1px solid var(--dsw-alias-border-l1); }
+.rss-qa-send { display: grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 999px; background: var(--dsw-alias-brand-primary); color: var(--dsw-alias-bg-base); cursor: pointer; }
+.rss-qa-send:hover:not(:disabled) { filter: brightness(1.06); }
+.rss-qa-send:disabled { opacity: .5; cursor: default; }
+.rss-qa-suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px; }
+.rss-qa-suggestions-loading { color: var(--dsw-alias-label-secondary); font-size: 11.5px; }
+.rss-qa-suggestion { max-width: 100%; padding: 4px 9px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 999px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11.5px; line-height: 1.4; text-align: left; cursor: pointer; }
+.rss-qa-suggestion:hover:not(:disabled) { color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-brand-primary); background: var(--dsw-alias-bg-layer-2); }
+.rss-qa-suggestion:disabled { opacity: .5; cursor: default; }
 .rss-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; padding: 5px 11px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 7px; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12.5px; cursor: pointer; }
 .rss-btn:hover:not(:disabled) { background: var(--dsw-alias-bg-layer-2); }
 .rss-btn:disabled { opacity: .5; cursor: default; }
@@ -4112,7 +4277,7 @@ window.__ModuleLoader__.load({
 @keyframes rss-spin { to { transform: rotate(360deg); } }
 .rss-panel-icon { color: var(--dsw-alias-label-secondary); }
 .rss-panel-icon.is-active { color: var(--dsw-alias-label-primary); }
-@media (max-width: 1180px) { .rss-list { width: 330px; } .rss-reader-title, .rss-reader-top, .rss-reader-meta, .rss-reader-tags, .rss-article, .rss-ai { padding-left: 24px; padding-right: 24px; } .rss-article { padding-left: 24px; padding-right: 24px; } .rss-ai { margin-left: 24px; margin-right: 24px; } }
+@media (max-width: 1180px) { .rss-list { width: 330px; } .rss-reader-title, .rss-reader-top, .rss-reader-meta, .rss-reader-tags, .rss-article { padding-left: 24px; padding-right: 24px; } .rss-ai { width: calc(min(100%, 820px) - 48px); } }
 @media (max-width: 980px) {
   .rss-list { width: 100%; border-right: 0; }
   .rss-reader { display: none; }
@@ -4121,9 +4286,9 @@ window.__ModuleLoader__.load({
   .rss-reader-back { display: grid; }
   .rss-list-heading .rss-list-menu { display: grid; }
   .rss-reader-top { padding: 10px 18px 0; }
-  .rss-reader-title, .rss-reader-meta, .rss-reader-tags, .rss-article, .rss-ai { padding-left: 18px; padding-right: 18px; }
+  .rss-reader-title, .rss-reader-meta, .rss-reader-tags, .rss-article { padding-left: 18px; padding-right: 18px; }
   .rss-reader .rss-banner { margin: 10px 18px; }
-  .rss-ai { margin-left: 18px; margin-right: 18px; }
+  .rss-ai { width: calc(min(100%, 820px) - 36px); }
   .rss-nav { position: absolute; z-index: 30; width: min(280px, 84vw); inset: 0 auto 0 0; box-shadow: 12px 0 32px rgba(0,0,0,.18); transform: translateX(-100%); visibility: hidden; transition: transform .18s ease, visibility .18s ease; }
   .rss-nav-open .rss-nav { transform: translateX(0); visibility: visible; }
   .rss-nav-backdrop { display: block; position: absolute; inset: 0; z-index: 25; background: rgba(0,0,0,.32); }
@@ -4138,7 +4303,7 @@ window.__ModuleLoader__.load({
   .rss-card-actions .rss-iconbtn { width: 28px; height: 28px; }
 }
 .rss-iconbtn:focus-visible, .rss-btn:focus-visible, .rss-navrow:focus-visible, .rss-card:focus-visible,
-.rss-aitab:focus-visible, .rss-tagchip:focus-visible, .rss-topicchip:focus-visible, .rss-textbtn:focus-visible,
+.rss-aitab:focus-visible, .rss-qa-suggestion:focus-visible, .rss-qa-send:focus-visible, .rss-tagchip:focus-visible, .rss-topicchip:focus-visible, .rss-textbtn:focus-visible,
 .rss-rowtoggle:focus-visible, .rss-search-input:focus-visible, .rss-input:focus-visible, .rss-pick:focus-visible {
   outline: 2px solid var(--dsw-alias-brand-primary);
   outline-offset: 2px;

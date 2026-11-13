@@ -10,7 +10,7 @@ const FEED = `<?xml version="1.0"?><rss version="2.0"><channel>
     <description>Body</description><pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate></item>
 </channel></rss>`
 
-function createContext() {
+function createContext(options = {}) {
   const cleanups = []
   const routes = new Map()
   const rpcHandlers = new Map()
@@ -39,6 +39,7 @@ function createContext() {
     systemPrompt: {
       section() { return () => {} },
     },
+    ...(options.llm === undefined ? {} : { llm: options.llm }),
   }
   const ctx = {
     ...services,
@@ -174,6 +175,62 @@ test('apply wires authenticated routes and agent tools over one operation layer'
     }))
     assert.equal(unknown.body.ok, false)
     assert.equal(unknown.status, 404)
+  } finally {
+    for (const cleanup of cleanups.reverse()) {
+      try { await cleanup() } catch { /* ignore */ }
+    }
+    globalThis.fetch = originalFetch
+    if (previousHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previousHome
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('auto-summarization writes summaries for new articles when enabled', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-rss-plugin-summary-'))
+  const previousHome = process.env.DSH_HOME
+  process.env.DSH_HOME = dir
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(
+    FEED.replace('<description>Body</description>', `<description>${'A longer article body that is easy to summarize. '.repeat(4)}</description>`),
+    { status: 200, headers: { 'content-type': 'application/xml' } },
+  )
+  const llm = {
+    async prepareCall() {
+      return {
+        config: {},
+        async *stream() {
+          yield { type: 'text-delta', text: 'A concise automatic summary.' }
+          yield { type: 'finish', reason: { kind: 'stop' } }
+        },
+      }
+    },
+  }
+  const { ctx, routes, cleanups } = createContext({ llm })
+  try {
+    const { apply } = await import('../index.js')
+    apply(ctx, { seedFeeds: false, refreshOnStart: false, dataDir: 'rss-summary-test', autoSummarize: true })
+    const call = async (method, params = {}) => {
+      const response = await routes.get('/api/rss.call').fetch(new Request('http://127.0.0.1/api/rss.call', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ method, params }),
+      }))
+      return (await response.json()).value
+    }
+    const added = await call('feedAdd', { url: 'https://plugin.example/feed.xml' })
+    assert.equal(added.added, 1)
+    let article = null
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const page = await call('articles', { view: 'all' })
+      if (page.items[0]?.hasSummary === true) {
+        article = await call('article', { id: page.items[0].id, markRead: false })
+        break
+      }
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+    assert.notEqual(article, null, 'the automatic summary was not written')
+    assert.equal(article.ai.summary, 'A concise automatic summary.')
   } finally {
     for (const cleanup of cleanups.reverse()) {
       try { await cleanup() } catch { /* ignore */ }

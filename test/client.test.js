@@ -239,7 +239,7 @@ test('the loaded panel renders the feed rail, article cards, reader, and AI summ
     contentHtml: '<p>Body paragraph with enough words to read.</p>', summaryHtml: '<p>summary</p>', contentLength: 44,
     ai: { summary: '**TL;DR** the point.\n\n- first key point\n- second key point', translation: null, translationLang: null, summaryLanguage: 'English' },
   }
-  const queue = [state, rows, { kind: 'all' }, '', 'a1', article, null, false, null, null, '', null, null, null, null, null, false, 'summary', '', [], false, '']
+  const queue = [state, rows, { kind: 'all' }, '', 'a1', article, null, false, null, null, '', null, null, null, null, false, 'summary', '', [], false, '']
   const React = createReactMock(queue)
   const plugin = loaded.factory(name => {
     if (name === 'react') return React
@@ -299,7 +299,7 @@ test('every dialog surface renders without throwing', async () => {
   })
   const rows = { items: [{ id: 'a1', feedId: 'f1', feedTitle: 'Example', title: 'Story', url: '', author: '', publishedAt: new Date().toISOString(), snippet: '', tags: [], image: '', read: false, starred: false, readLater: false, hasSummary: false, hasTranslation: false, muted: false, highlighted: false }], total: 1, hasMore: false }
   const article = { id: 'a1', feedId: 'f1', feedTitle: 'Example', title: 'Story', url: '', author: '', publishedAt: new Date().toISOString(), tags: [], image: '', read: false, starred: false, readLater: false, contentHtml: '<p>Body</p>', summaryHtml: '', ai: {} }
-  const base = (dialog, brief = null) => [makeState(), rows, { kind: 'all' }, '', 'a1', article, null, false, null, null, '', null, dialog, null, brief, null, false, 'summary', '', [], false, '']
+  const base = dialog => [makeState(), rows, { kind: 'all' }, '', 'a1', article, null, false, null, null, '', null, dialog, null, null, false, 'summary', '', [], false, '']
 
   const renderPage = (queue, asTree = false) => {
     let loaded
@@ -316,9 +316,9 @@ test('every dialog surface renders without throwing', async () => {
     const tree = renderTree(main.component({ t: key => key, ...main.options.inject() }))
     return asTree ? tree : classesOf(tree)
   }
-  const renderDialog = (dialog, brief = null) => renderPage(base(dialog, brief))
-  const renderSettings = tab => renderPage(base({ type: 'settings', tab }).slice(0, 17))
-  const renderSettingsTree = tab => renderPage(base({ type: 'settings', tab }).slice(0, 17), true)
+  const renderDialog = dialog => renderPage(base(dialog))
+  const renderSettings = tab => renderPage(base({ type: 'settings', tab }).slice(0, 16))
+  const renderSettingsTree = tab => renderPage(base({ type: 'settings', tab }).slice(0, 16), true)
 
   for (const tab of ['manage', 'general', 'ai', 'filters', 'opml', 'categories', 'shortcuts']) {
     const classes = renderSettings(tab)
@@ -354,7 +354,7 @@ test('every dialog surface renders without throwing', async () => {
   assert.equal(shortcutsTab.has('rss-shortcut-row'), true)
   assert.equal(shortcutsTab.has('rss-settings-foot'), true)
 
-  const askQueue = base(null).slice(0, 17).concat(['ask', '', [], false, '', ['One?', 'Two?', 'Three?'], false])
+  const askQueue = base(null).slice(0, 16).concat(['ask', '', [], false, '', ['One?', 'Two?', 'Three?'], false])
   const askTree = renderPage(askQueue, true)
   const askSuggestions = []
   walk(askTree, (node) => {
@@ -371,7 +371,7 @@ test('every dialog surface renders without throwing', async () => {
   assert.equal(askSend[0].props['aria-label'], 'ai.send')
   assert.equal(askSend[0].children.length, 1)
   assert.equal(askSend[0].children[0].type, 'svg')
-  const askLoadingTree = renderPage(base(null).slice(0, 17).concat(['ask', '', [], false, '', [], true]), true)
+  const askLoadingTree = renderPage(base(null).slice(0, 16).concat(['ask', '', [], false, '', [], true]), true)
   const askLoadingClasses = classesOf(askLoadingTree)
   assert.equal(askLoadingClasses.has('rss-qa-suggestions'), true)
   assert.equal(askLoadingClasses.has('rss-qa-suggestions-loading'), true)
@@ -380,8 +380,6 @@ test('every dialog surface renders without throwing', async () => {
   assert.equal(add.has('rss-field'), true)
   const remove = renderDialog({ type: 'removeFeed', feed: { id: 'f1', title: 'Example' } })
   assert.equal(remove.has('rss-btn-danger'), true)
-  const brief = renderDialog(null, '## Brief\n\n- one point')
-  assert.equal(brief.has('rss-brief'), true)
   const recommend = renderDialog({ type: 'recommend', picks: [{ id: 'a1', title: 'Story', score: 92, reason: 'deep', feedTitle: 'Example', publishedAt: new Date().toISOString() }] })
   assert.equal(recommend.has('rss-pick'), true)
   assert.equal(recommend.has('rss-pick-score'), true)
@@ -431,7 +429,7 @@ test('the management section lists invalid feeds and the prune and clear dialogs
   const render = (manageDialog, dialog = null) => {
     let loaded
     new Function('window', source)({ __ModuleLoader__: { load(options) { loaded = options } } })
-    const queue = [state, rows, { kind: 'all' }, '', null, null, null, false, null, null, '', null, dialog, manageDialog, null, null, false]
+    const queue = [state, rows, { kind: 'all' }, '', null, null, null, false, null, null, '', null, dialog, manageDialog, null, false]
     const React = createReactMock(queue)
     const plugin = loaded.factory(name => { if (name === 'react') return React; throw new Error(name) })
     const registrations = []
@@ -506,7 +504,7 @@ test('the discovery page renders topic chips, verified candidates, and the add c
     const main = registrations.find(item => item.options.name === 'main')
     return classesOf(renderTree(main.component({ t: key => key, ...main.options.inject() })))
   }
-  const base = [state, rows, { kind: 'all' }, '', null, null, null, false, null, null, '', null, { type: 'discover' }, null, null, null, false]
+  const base = [state, rows, { kind: 'all' }, '', null, null, null, false, null, null, '', null, { type: 'discover' }, null, null, false]
   const empty = render([...base])
   assert.equal(empty.has('rss-discover-page'), true)
   assert.equal(empty.has('rss-discover-topics'), true)
@@ -567,7 +565,7 @@ test('the edit-feed, rename-category, shortcuts, and discard dialogs render', as
   const render = (dialog, manageDialog = null, extra = []) => {
     let loaded
     new Function('window', source)({ __ModuleLoader__: { load(options) { loaded = options } } })
-    const queue = [state, rows, { kind: 'all' }, '', 'a1', article, null, false, null, null, '', null, dialog, manageDialog, null, null, false, ...extra]
+    const queue = [state, rows, { kind: 'all' }, '', 'a1', article, null, false, null, null, '', null, dialog, manageDialog, null, false, ...extra]
     const React = createReactMock(queue)
     const plugin = loaded.factory(name => { if (name === 'react') return React; throw new Error(name) })
     const registrations = []
@@ -661,7 +659,6 @@ test('the list exposes search, muted, paused, error, toast, drawer, and mobile-r
       options.toast ?? null,
       options.dialog ?? null,
       options.manageDialog ?? null,
-      null,
       null,
       options.navOpen ?? false,
       'summary', '', [], false, '',

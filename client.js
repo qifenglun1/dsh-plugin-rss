@@ -53,8 +53,6 @@ window.__ModuleLoader__.load({
       'reader.summary': 'Summary',
       'reader.translate': 'Translate',
       'reader.ask': 'Ask',
-      'reader.classify': 'Auto-classify',
-      'reader.brief': 'Daily brief',
       'list.aiRank': 'AI rank',
       'dialog.aiRank': 'DeepSeek picks',
       'dialog.aiRankHint': 'Ranked from your unread candidates and reading signals. Selecting one opens the article.',
@@ -167,7 +165,6 @@ window.__ModuleLoader__.load({
       'ai.thinking': 'Thinking…',
       'ai.busy': 'DeepSeek is working…',
       'ai.unavailable': 'No language model is available in this profile.',
-      'ai.classified': 'Classified as {cats}',
       'ai.model': '{provider} · {model}',
       'dialog.addFeed': 'Add subscription',
       'dialog.feedUrl': 'Feed or site URL',
@@ -352,8 +349,6 @@ window.__ModuleLoader__.load({
       'reader.summary': '摘要',
       'reader.translate': '翻译',
       'reader.ask': '问答',
-      'reader.classify': '自动分类',
-      'reader.brief': '每日简报',
       'list.aiRank': 'AI 推荐',
       'dialog.aiRank': 'DeepSeek 精选',
       'dialog.aiRankHint': '根据未读候选和阅读偏好排序，选择一项即可打开文章。',
@@ -466,7 +461,6 @@ window.__ModuleLoader__.load({
       'ai.thinking': '思考中…',
       'ai.busy': 'DeepSeek 正在处理…',
       'ai.unavailable': '当前配置没有可用的语言模型。',
-      'ai.classified': '已分类为 {cats}',
       'ai.model': '{provider} · {model}',
       'dialog.addFeed': '添加订阅',
       'dialog.feedUrl': '订阅源或网站地址',
@@ -2802,17 +2796,6 @@ window.__ModuleLoader__.load({
           pick.reason ? h('span', { className: 'rss-pick-reason' }, pick.reason) : null)))))
     }
 
-    function BriefDialog({ t, brief, onClose }) {
-      return h(Modal, {
-        t,
-        title: t('reader.brief'),
-        onClose,
-        wide: true,
-        footer: h(Button, { onClick: onClose }, t('dialog.close')),
-      },
-      h('div', { className: 'rss-richtext rss-brief' }, renderRich(brief, 'brief')))
-    }
-
     /* ------------------------------------------------------------------ *
      * Root page
      * ------------------------------------------------------------------ */
@@ -2843,7 +2826,6 @@ window.__ModuleLoader__.load({
       const [toast, setToast] = useState(null)
       const [dialog, setDialog] = useState(null)
       const [manageDialog, setManageDialog] = useState(null)
-      const [brief, setBrief] = useState(null)
       const [aiModels, setAiModels] = useState(null)
       const [navOpen, setNavOpen] = useState(false)
       const listScrollRef = useRef(null)
@@ -3266,14 +3248,6 @@ window.__ModuleLoader__.load({
           const apply = updater => setCurrent(previous => previous !== null && previous.id === targetId ? updater(previous) : previous)
           if (kind === 'summary') apply(previous => ({ ...previous, ai: { ...previous.ai, summary: result.summary, summaryAt: new Date().toISOString() } }))
           if (kind === 'translate') apply(previous => ({ ...previous, ai: { ...previous.ai, translation: result.translation, translationLang: result.language } }))
-          if (kind === 'classify') {
-            apply(previous => ({
-              ...previous,
-              tags: [...new Set([...(previous.tags ?? []), ...(result.tags ?? [])])],
-              ai: { ...previous.ai, categories: result.categories, tags: result.tags, relevance: result.relevance, classifiedAt: new Date().toISOString() },
-            }))
-            if ((result.categories ?? []).length > 0) showToast(interpolate(t('ai.classified'), { cats: result.categories.join(', ') }), 'ok')
-          }
           return result
         } catch (caught) {
           // The error banner already reports the failure; do not reject the onClick promise.
@@ -3282,7 +3256,7 @@ window.__ModuleLoader__.load({
         } finally {
           if (aliveRef.current) setAiBusy(null)
         }
-      }, [aiBusy, busy, clearError, current, showError, showToast, t])
+      }, [aiBusy, busy, clearError, current, showError, t])
 
       const summarize = useCallback((force) => aiAction('summary', id => hostCall('aiSummarize', { id, force: force === true })), [aiAction])
 
@@ -3298,7 +3272,6 @@ window.__ModuleLoader__.load({
       }, [aiBusy, busy, current, readerLoading, state, summarize])
 
       const translate = useCallback((force) => aiAction('translate', id => hostCall('aiTranslate', { id, force: force === true })), [aiAction])
-      const classify = useCallback(() => aiAction('classify', id => hostCall('aiClassify', { id })), [aiAction])
       const suggestQuestions = useCallback(async (id, history) => {
         const result = await hostCall('aiQuestions', { id, history })
         return Array.isArray(result.questions) ? result.questions : []
@@ -3313,20 +3286,6 @@ window.__ModuleLoader__.load({
           if (aliveRef.current) setAiBusy(null)
         }
       }, [current, t])
-
-      const writeBrief = useCallback(async () => {
-        if (aiBusy !== null || busy === 'fullText') return
-        setAiBusy('brief')
-        clearError('ai')
-        try {
-          const result = await hostCall('aiBrief', { limit: 10 })
-          setBrief(result.brief)
-        } catch (caught) {
-          showError('ai', caught.message ?? t('error.generic'))
-        } finally {
-          if (aliveRef.current) setAiBusy(null)
-        }
-      }, [aiBusy, busy, clearError, showError, t])
 
       const writeRank = useCallback(async () => {
         if (aiBusy !== null || busy === 'fullText') return
@@ -3584,7 +3543,7 @@ window.__ModuleLoader__.load({
         const tag = target?.tagName
         const editable = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable === true
         const key = event.key
-        const overlayOpen = dialog !== null || manageDialog !== null || brief !== null
+        const overlayOpen = dialog !== null || manageDialog !== null
         if (overlayOpen) return
         if (event.metaKey || event.ctrlKey) {
           if (key !== undefined && key.toLowerCase() === 'k') {
@@ -3657,7 +3616,7 @@ window.__ModuleLoader__.load({
           event.preventDefault()
           void refresh()
         }
-      }, [brief, busy, clearSearch, closeReader, current, dialog, focusSearch, manageDialog, markCurrent, navOpen, openOriginal, openShortcuts, openSibling, query, refresh, selectedId])
+      }, [busy, clearSearch, closeReader, current, dialog, focusSearch, manageDialog, markCurrent, navOpen, openOriginal, openShortcuts, openSibling, query, refresh, selectedId])
 
       useEffect(() => {
         window.addEventListener('keydown', keyboardHandler)
@@ -3786,7 +3745,6 @@ window.__ModuleLoader__.load({
             h(Button, { onClick: closeDialog }, t('dialog.cancel')),
             h(Button, { variant: 'danger', onClick: confirmRemoveFeed }, t('dialog.remove'))),
         }, h('p', null, dialog.feed.title), h('p', { className: 'rss-muted' }, t('dialog.removeFeedHint'))) : null,
-        brief === null ? null : h(BriefDialog, { t, brief, onClose: () => setBrief(null) }),
         state !== null && state.feeds.length === 0 && state.counts.all === 0
           ? h('div', { className: 'rss-onboarding' },
             h('div', { className: 'rss-onboarding-card' },

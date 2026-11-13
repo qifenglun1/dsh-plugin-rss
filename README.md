@@ -1,5 +1,7 @@
 # RSS reader for DeepSeek Harness
 
+[![test](https://github.com/qifenglun1/dsh-plugin-rss/actions/workflows/test.yml/badge.svg)](https://github.com/qifenglun1/dsh-plugin-rss/actions/workflows/test.yml)
+
 A Folo-inspired RSS and Atom information hub that runs natively inside DeepSeek Harness (DSH). It adds a full three-pane reading panel to the DSH Web GUI, stores everything locally, and uses the Harness model route for DeepSeek-powered summaries, translation, auto-classification, topic-based feed discovery, recommendations, and article Q&A.
 
 ![RSS reader panel with a feed list, an article list, and an AI summary beside the reading pane](docs/preview.svg)

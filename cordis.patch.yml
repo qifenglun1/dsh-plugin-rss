@@ -1,0 +1,4 @@
+- insert:
+    - id: rss
+      name: 'dsh-plugin-rss'
+      config: {}

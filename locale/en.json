@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "RSS reader",
+    "description": "A Folo-style RSS and Atom reader with categories, tags, full-text reading, search, favorites, read later, content filters, topic-based feed discovery, and DeepSeek AI summaries, translation, auto-classification, AI-ranked recommendations, and article Q&A. Open it from the RSS icon in the sidebar panel list. Feeds, articles, and reading state stay in a local data file under $DSH_HOME/rss; AI actions send only the article text you select to the configured model provider, and discovery sends only the chosen topics, current feed domains, and category names.",
+    "detail": "docs/DETAIL.md"
+  }
+}
